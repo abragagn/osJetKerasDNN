@@ -15,14 +15,15 @@ seed = 7
 np.random.seed(seed) #init for reproducibilty
 
 ##Input
-maxtracks = 50
+maxtracks_read = 100 # max number of tracks to read
+maxtracks_train = 20 # max number of tracks to use in the training 
+
 filename = 'ntuHevjin.root'
 file=TFile(filename, 'r')
 tree=file.Get('PDsecondTree')
 cuts = 'trkIsInJet==1 && trkIsHighPurity==1'
 
 vInput=root_numpy.tree2array(tree, branches=['trkPt', 'trkEta', 'trkPhi','trkCharge'], selection=cuts)
-vLabel=root_numpy.tree2array(tree, branches=['ssbLund'], selection='')
 vInput=root_numpy.rec2array(vInput)
 
 nfeat = len(vInput[0])
@@ -32,19 +33,23 @@ vEta = vInput[:,1]
 vPhi = vInput[:,2]
 vQ = vInput[:,-1]
 
-vInput = np.zeros([len(vPt), maxtracks, nfeat])
+##Shape formatting and zero padding
+vInput = np.zeros([len(vPt), maxtracks_read, nfeat])
 
 for i in range(len(vPt)):
     for j in range(len(vPt[i])):
-        if j >= maxtracks:
-            continue
+        if j >= maxtracks_read:
+            break
         vInput[i][j][0] = vPt[i][j]
         vInput[i][j][1] = vEta[i][j]
         vInput[i][j][2] = vPhi[i][j]
         vInput[i][j][-1] = vQ[i][j]
 
-vInput = vInput[:,::-1,:]
+vInput.view('f8,f8,f8,f8').sort(order=['f0'], axis=1) #Ordering by Pt
 
+vInput = vInput[:,-maxtracks_train:,:] #Only using the most energetic maxtracks_train tracks to train
+
+vLabel=root_numpy.tree2array(tree, branches=['ssbLund'], selection='')
 vLabel=root_numpy.rec2array(vLabel)
 vLabel[vLabel == 531] = 1
 vLabel[vLabel == -531] = 0
@@ -68,8 +73,5 @@ for i in range(len(pred)):
     else:
         wt = wt + 1
 
-print str(rt) + ' ' + str(wt)
-
-print('RT: %i%' % (rt))
-print('WT: %i%' % (wt))
-print('w: %.2f%%' % (( wt/(wt+rt) )*100))
+test_loss, test_acc = model.evaluate(vInput, vLabel)
+print('w from acc: %.2f%%' % ((1-test_acc)*100))
