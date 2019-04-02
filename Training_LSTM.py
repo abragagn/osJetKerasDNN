@@ -15,28 +15,35 @@ seed = 7
 np.random.seed(seed) #init for reproducibilty
 
 ##Input
-maxtracks = 15
+maxtracks = 50
 filename = 'ntuHevjin.root'
 file=TFile(filename, 'r')
 tree=file.Get('PDsecondTree')
 cuts = 'trkIsInJet==1 && trkIsHighPurity==1'
 
-vInput=root_numpy.tree2array(tree, branches=['trkPt', 'trkCharge'], selection=cuts)
+vInput=root_numpy.tree2array(tree, branches=['trkPt', 'trkEta', 'trkPhi','trkCharge'], selection=cuts)
 vLabel=root_numpy.tree2array(tree, branches=['ssbLund'], selection='')
 vInput=root_numpy.rec2array(vInput)
 
-vPt = vInput[:,0]
-vQ = vInput[:,1]
+nfeat = len(vInput[0])
 
-vInput = np.zeros([len(vPt), maxtracks, 2])
+vPt = vInput[:,0]
+vEta = vInput[:,1]
+vPhi = vInput[:,2]
+vQ = vInput[:,-1]
+
+vInput = np.zeros([len(vPt), maxtracks, nfeat])
 
 for i in range(len(vPt)):
     for j in range(len(vPt[i])):
         if j >= maxtracks:
             continue
         vInput[i][j][0] = vPt[i][j]
-        vInput[i][j][1] = vQ[i][j]
+        vInput[i][j][1] = vEta[i][j]
+        vInput[i][j][2] = vPhi[i][j]
+        vInput[i][j][-1] = vQ[i][j]
 
+vInput = vInput[:,::-1,:]
 
 vLabel=root_numpy.rec2array(vLabel)
 vLabel[vLabel == 531] = 1
@@ -44,16 +51,22 @@ vLabel[vLabel == -531] = 0
 
 ##Model Definition 
 dropoutRate = 0.1
-lstmOutDim = 10
+lstmOutDim = 20
 
-Inputs = Input(shape=(maxtracks,2)) # maxtracks, 2 features
+Inputs = Input(shape=(maxtracks,nfeat)) # maxtracks, nfeat features
 
 x = LSTM(lstmOutDim)
 x = x(Inputs)
 x = Dense(lstmOutDim, activation='relu',kernel_initializer='lecun_uniform')(x)
 if dropoutRate != 0 :
     x = Dropout(dropoutRate)(x)
-x = Dense(5, activation='relu',kernel_initializer='lecun_uniform')(x)
+x = Dense(20, activation='relu',kernel_initializer='lecun_uniform')(x)
+if dropoutRate != 0 :
+    x = Dropout(dropoutRate)(x)
+x = Dense(10, activation='relu',kernel_initializer='lecun_uniform')(x)
+if dropoutRate != 0 :
+    x = Dropout(dropoutRate)(x)
+
 
 predictions = Dense(1, kernel_initializer='lecun_uniform', activation='sigmoid')(x)
 
@@ -61,7 +74,6 @@ model = Model(inputs=Inputs, outputs=predictions)
 
 model.compile(loss='binary_crossentropy',optimizer='adam',metrics=['accuracy'])
 model.summary()
-model.save('testLSTM.h5')
 
 ##Training model
 reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss'
@@ -72,15 +84,18 @@ reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss'
 
 history = model.fit(vInput, vLabel
     , batch_size=128
-    , epochs=2
+    , epochs=5
     , verbose=1
     , callbacks=[reduce_lr]
     , validation_split=0.2
     )
 
+model.save('testLSTM.h5')
+
+
 scores = model.evaluate(vInput, vLabel)
-print("\n%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
-print("w: %.2f%%" % ((1-scores[1])*100))
+print('\n%s: %.2f%%' % (model.metrics_names[1], scores[1]*100))
+print('w: %.2f%%' % ((1-scores[1])*100))
 
 # list all data in history
 print(history.history.keys())
@@ -91,6 +106,6 @@ plt.title('model loss')
 plt.ylabel('loss')
 plt.xlabel('epoch')
 plt.legend(['train', 'test'], loc='upper left')
-plt.savefig("png/"+"plot_history.png")
+plt.savefig('png/'+'plot_history.png')
 plt.clf()
 
