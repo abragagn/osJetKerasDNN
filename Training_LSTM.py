@@ -21,17 +21,20 @@ maxtracks_train = 20 # max number of tracks to use in the training
 filename = 'ntuHevjin.root'
 file=TFile(filename, 'R')
 tree=file.Get('PDsecondTree')
-cuts = 'trkIsInJet==1 && trkIsHighPurity==1'
+
 evtcuts = '((evtNumber % 10) < 8)'
 
-vInput=root_numpy.tree2array(tree, branches=['trkPt', 'trkEta', 'trkPhi','trkCharge'], selection=cuts+' && '+evtcuts)
+vInput=root_numpy.tree2array(tree, branches=['trkPt', 'trkEta', 'trkPhi', 'trkIsInJet', 'trkIsHighPurity', 'trkCharge'], selection=evtcuts)
 vInput=root_numpy.rec2array(vInput)
 
-nfeat = len(vInput[0])
+nspec = 2
+nfeat = len(vInput[0]) - nspec
 
 vPt = vInput[:,0]
 vEta = vInput[:,1]
 vPhi = vInput[:,2]
+vtrkIsInJet = vInput[:,3]
+vtrkIsHighPurity = vInput[:,4]
 vQ = vInput[:,-1]
 
 ##Shape formatting and zero padding
@@ -41,6 +44,8 @@ for i in range(len(vPt)):
     for j in range(len(vPt[i])):
         if j >= maxtracks_read:
             break
+        if vtrkIsInJet == 0 or vtrkIsHighPurity == 0 :
+            continue
         vInput[i][j][0] = vPt[i][j]
         vInput[i][j][1] = vEta[i][j]
         vInput[i][j][2] = vPhi[i][j]
@@ -70,16 +75,18 @@ x = x(Inputs)
 x = Dense(lstmOutDim, activation='relu',kernel_initializer='lecun_uniform')(x)
 if dropoutRate != 0 :
     x = Dropout(dropoutRate)(x)
+
 x = Dense(20, activation='relu',kernel_initializer='lecun_uniform')(x)
 if dropoutRate != 0 :
     x = Dropout(dropoutRate)(x)
+
 x = Dense(10, activation='relu',kernel_initializer='lecun_uniform')(x)
 if dropoutRate != 0 :
     x = Dropout(dropoutRate)(x)
+
 predictions = Dense(1, kernel_initializer='lecun_uniform', activation='sigmoid')(x)
 
 model = Model(inputs=Inputs, outputs=predictions)
-
 model.compile(loss='binary_crossentropy',optimizer='adam',metrics=['accuracy'])
 model.summary()
 
@@ -100,7 +107,6 @@ history = model.fit(vInput, vLabel
     )
 
 model.save('testLSTM.h5')
-
 
 scores = model.evaluate(vInput, vLabel)
 print('\n%s: %.2f%%' % (model.metrics_names[1], scores[1]*100))

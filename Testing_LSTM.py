@@ -19,20 +19,22 @@ maxtracks_read = 100 # max number of tracks to read
 maxtracks_train = 20 # max number of tracks to use in the training 
 
 filename = 'ntuHevjin.root'
-file=TFile(filename, 'r')
+file=TFile(filename, 'R')
 tree=file.Get('PDsecondTree')
-cuts = 'trkIsInJet==1 && trkIsHighPurity==1'
-evtcuts = '((evtNumber % 10) >= 8)'
 
+evtcuts = '((evtNumber % 10) < 8)'
 
-vInput=root_numpy.tree2array(tree, branches=['trkPt', 'trkEta', 'trkPhi','trkCharge'], selection=cuts+' && '+evtcuts)
+vInput=root_numpy.tree2array(tree, branches=['trkPt', 'trkEta', 'trkPhi', 'trkIsInJet', 'trkIsHighPurity', 'trkCharge'], selection=evtcuts)
 vInput=root_numpy.rec2array(vInput)
 
-nfeat = len(vInput[0])
+nspec = 2
+nfeat = len(vInput[0]) - nspec
 
 vPt = vInput[:,0]
 vEta = vInput[:,1]
 vPhi = vInput[:,2]
+vtrkIsInJet = vInput[:,3]
+vtrkIsHighPurity = vInput[:,4]
 vQ = vInput[:,-1]
 
 ##Shape formatting and zero padding
@@ -42,6 +44,8 @@ for i in range(len(vPt)):
     for j in range(len(vPt[i])):
         if j >= maxtracks_read:
             break
+        if vtrkIsInJet == 0 or vtrkIsHighPurity == 0 :
+            continue
         vInput[i][j][0] = vPt[i][j]
         vInput[i][j][1] = vEta[i][j]
         vInput[i][j][2] = vPhi[i][j]
@@ -55,6 +59,10 @@ vLabel=root_numpy.tree2array(tree, branches=['ssbLund'], selection=evtcuts)
 vLabel=root_numpy.rec2array(vLabel)
 vLabel[vLabel == 531] = 1
 vLabel[vLabel == -531] = 0
+
+vWeights=root_numpy.tree2array(tree, branches=['evtWeight'], selection=evtcuts)
+vWeights=root_numpy.rec2array(vWeights)
+vWeights=vWeights.reshape((vWeights.shape[0],))
 
 print '---- input loaded -----'
 
