@@ -19,11 +19,12 @@ maxtracks_read = 100 # max number of tracks to read
 maxtracks_train = 20 # max number of tracks to use in the training 
 
 filename = 'ntuHevjin.root'
-file=TFile(filename, 'r')
+file=TFile(filename, 'R')
 tree=file.Get('PDsecondTree')
 cuts = 'trkIsInJet==1 && trkIsHighPurity==1'
+evtcuts = '((evtNumber % 10) < 8)'
 
-vInput=root_numpy.tree2array(tree, branches=['trkPt', 'trkEta', 'trkPhi','trkCharge'], selection=cuts)
+vInput=root_numpy.tree2array(tree, branches=['trkPt', 'trkEta', 'trkPhi','trkCharge'], selection=cuts+' && '+evtcuts)
 vInput=root_numpy.rec2array(vInput)
 
 nfeat = len(vInput[0])
@@ -49,10 +50,14 @@ vInput.view('f8,f8,f8,f8').sort(order=['f0'], axis=1) #Ordering by Pt
 
 vInput = vInput[:,-maxtracks_train:,:] #Only using the most energetic maxtracks_train tracks to train
 
-vLabel=root_numpy.tree2array(tree, branches=['ssbLund'], selection='')
+vLabel=root_numpy.tree2array(tree, branches=['ssbLund'], selection=evtcuts)
 vLabel=root_numpy.rec2array(vLabel)
 vLabel[vLabel == 531] = 1
 vLabel[vLabel == -531] = 0
+
+vWeights=root_numpy.tree2array(tree, branches=['evtWeight'], selection=evtcuts)
+vWeights=root_numpy.rec2array(vWeights)
+vWeights=vWeights.reshape((vWeights.shape[0],))
 
 ##Model Definition 
 dropoutRate = 0.1
@@ -86,8 +91,9 @@ reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss'
     )
 
 history = model.fit(vInput, vLabel
+    , sample_weight = vWeights
     , batch_size=128
-    , epochs=3
+    , epochs=5
     , verbose=1
     , callbacks=[reduce_lr]
     , validation_split=0.2

@@ -22,8 +22,10 @@ filename = 'ntuHevjin.root'
 file=TFile(filename, 'r')
 tree=file.Get('PDsecondTree')
 cuts = 'trkIsInJet==1 && trkIsHighPurity==1'
+evtcuts = '((evtNumber % 10) >= 8)'
 
-vInput=root_numpy.tree2array(tree, branches=['trkPt', 'trkEta', 'trkPhi','trkCharge'], selection=cuts)
+
+vInput=root_numpy.tree2array(tree, branches=['trkPt', 'trkEta', 'trkPhi','trkCharge'], selection=cuts+' && '+evtcuts)
 vInput=root_numpy.rec2array(vInput)
 
 nfeat = len(vInput[0])
@@ -49,7 +51,7 @@ vInput.view('f8,f8,f8,f8').sort(order=['f0'], axis=1) #Ordering by Pt
 
 vInput = vInput[:,-maxtracks_train:,:] #Only using the most energetic maxtracks_train tracks to train
 
-vLabel=root_numpy.tree2array(tree, branches=['ssbLund'], selection='')
+vLabel=root_numpy.tree2array(tree, branches=['ssbLund'], selection=evtcuts)
 vLabel=root_numpy.rec2array(vLabel)
 vLabel[vLabel == 531] = 1
 vLabel[vLabel == -531] = 0
